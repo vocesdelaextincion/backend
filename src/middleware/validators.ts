@@ -67,6 +67,36 @@ export const createRecordingValidator = [
     .isString()
     .trim()
     .escape(),
+  body('metadata')
+    .optional()
+    .isString()
+    .custom((value) => {
+      try {
+        JSON.parse(value);
+      } catch (e) {
+        throw new Error('Metadata must be a valid JSON string.');
+      }
+      return true;
+    }),
+];
+
+// Validation rules for creating a tag
+export const createTagValidator = [
+  body('name')
+    .notEmpty()
+    .withMessage('Name is required.')
+    .trim()
+    .escape(),
+];
+
+// Validation rules for updating a tag
+export const updateTagValidator = [
+  body('name')
+    .optional()
+    .notEmpty()
+    .withMessage('Name cannot be empty.')
+    .trim()
+    .escape(),
 ];
 
 // Validation rules for updating a recording
@@ -90,4 +120,15 @@ export const updateRecordingValidator = [
     .isString()
     .trim()
     .escape(),
+  body('metadata')
+    .optional()
+    .isString()
+    .custom((value) => {
+      try {
+        JSON.parse(value);
+      } catch (e) {
+        throw new Error('Metadata must be a valid JSON string.');
+      }
+      return true;
+    }),
 ];

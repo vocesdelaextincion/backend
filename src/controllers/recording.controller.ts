@@ -116,7 +116,7 @@ export const updateRecording = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, description, tags } = req.body;
+    const { title, description, tags, metadata } = req.body;
     const file = req.file;
 
     const recording = await prisma.recording.findUnique({
@@ -168,6 +168,9 @@ export const updateRecording = async (
       );
     }
 
+    // Metadata is expected to be a stringified JSON from the frontend
+    const parsedMetadata = metadata ? JSON.parse(metadata) : undefined;
+
     const updatedRecording = await prisma.recording.update({
       where: { id },
       data: {
@@ -175,6 +178,7 @@ export const updateRecording = async (
         description,
         fileUrl,
         fileKey,
+        metadata: parsedMetadata,
         tags: tags
           ? { set: tags.map((tagName: string) => ({ name: tagName })) }
           : undefined,

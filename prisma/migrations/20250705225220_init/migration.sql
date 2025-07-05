@@ -10,9 +10,14 @@ CREATE TABLE "User" (
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "isVerified" BOOLEAN NOT NULL DEFAULT false,
-    "verificationToken" TEXT,
+    "emailVerificationToken" TEXT,
+    "emailVerificationTokenExpires" TIMESTAMP(3),
+    "passwordResetToken" TEXT,
+    "passwordResetTokenExpires" TIMESTAMP(3),
     "plan" "Plan" NOT NULL DEFAULT 'FREE',
     "role" "Role" NOT NULL DEFAULT 'USER',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -20,12 +25,13 @@ CREATE TABLE "User" (
 -- CreateTable
 CREATE TABLE "Recording" (
     "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "duration" INTEGER NOT NULL,
-    "location" TEXT NOT NULL,
-    "date" TIMESTAMP(3) NOT NULL,
-    "audioUrl" TEXT NOT NULL,
-    "notes" TEXT,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "fileUrl" TEXT NOT NULL,
+    "fileKey" TEXT NOT NULL,
+    "metadata" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Recording_pkey" PRIMARY KEY ("id")
 );
@@ -48,6 +54,18 @@ CREATE TABLE "_RecordingToTag" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_emailVerificationToken_key" ON "User"("emailVerificationToken");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_passwordResetToken_key" ON "User"("passwordResetToken");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Recording_fileUrl_key" ON "Recording"("fileUrl");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Recording_fileKey_key" ON "Recording"("fileKey");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Tag_name_key" ON "Tag"("name");
