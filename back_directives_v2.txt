@@ -1,0 +1,296 @@
+# API Specification: Voces de la Extinción
+
+## 1. Project Overview
+
+- **Project Name:** Voces de la Extinción
+- **Objective:** Develop a backend API to manage a database of nature sound recordings. The system will handle user authentication, access control based on subscription plans, and administration of recordings and users.
+
+## 2. Tech Stack
+
+- **Backend:** Node.js with Express.js
+- **Language:** TypeScript
+- **Database:** PostgreSQL
+- **ORM:** Prisma
+- **File Storage:** AWS S3 for audio recordings
+
+## 3. User Roles & Permissions
+
+### Regular User
+- Register and create an account.
+- Verify their email address.
+- Log in to receive an authentication token.
+- Reset their password.
+- Access and get recordings based on their subscription plan.
+- Request a plan upgrade/downgrade (manual process via admin).
+
+### Admin
+- Full CRUD (Create, Read, Update, Delete) operations on recordings.
+- Full CRUD operations on user accounts.
+- Manually upgrade or downgrade a user's subscription plan.
+
+## 4. Data Models
+
+### User
+- `id` (String, UUID) - Primary Key
+- `email` (String) - Unique, used for login
+- `password` (String) - Hashed
+- `isVerified` (Boolean) - Default: `false`
+- `verificationToken` (String, Nullable)
+- `plan` (Enum: `FREE`, `PREMIUM`) - Default: `FREE`
+- `role` (Enum: `USER`, `ADMIN`) - Default: `USER`
+
+### Recording
+- `id` (String, UUID) - Primary Key
+- `name` (String)
+- `duration` (Int) - In seconds
+- `location` (String)
+- `date` (DateTime)
+- `tags` (Relation to Tag model)
+- `audioUrl` (String) - URL to the file in AWS S3 (This is the connection with S3, it's the most important integration)
+- `notes` (String, Nullable)
+
+### Tag
+- `id` (String, UUID) - Primary Key
+- `name` (String) - Unique
+
+## 5. SQL Table Definitions
+
+### Users Table
+```sql
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
+    "verificationToken" TEXT,
+    "plan" TEXT NOT NULL DEFAULT 'FREE',
+    "role" TEXT NOT NULL DEFAULT 'USER',
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+```
+
+### Recordings Table
+```sql
+CREATE TABLE "Recording" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "duration" INTEGER NOT NULL,
+    "location" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "audioUrl" TEXT NOT NULL,
+    "notes" TEXT,
+
+    CONSTRAINT "Recording_pkey" PRIMARY KEY ("id")
+);
+```
+
+### Tags Table
+```sql
+CREATE TABLE "Tag" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "Tag_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Tag_name_key" ON "Tag"("name");
+```
+
+### Recordings to Tags (Many-to-Many)
+```sql
+CREATE TABLE "_RecordingToTag" (
+    "A" TEXT NOT NULL,
+    "B" TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX "_RecordingToTag_AB_unique" ON "_RecordingToTag"("A", "B");
+CREATE INDEX "_RecordingToTag_B_index" ON "_RecordingToTag"("B");
+
+ALTER TABLE "_RecordingToTag" ADD CONSTRAINT "_RecordingToTag_A_fkey" FOREIGN KEY ("A") REFERENCES "Recording"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "_RecordingToTag" ADD CONSTRAINT "_RecordingToTag_B_fkey" FOREIGN KEY ("B") REFERENCES "Tag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+```
+
+## 6. API Endpoints
+
+### Authentication
+- `POST /auth/register` - Creates a new user, sends verification email.
+- `POST /auth/verify` - Verifies a user's email with a token.
+- `POST /auth/login` - Authenticates a user and returns a JWT.
+- `POST /auth/forgot-password` - Sends a password reset token to the user's email.
+- `POST /auth/reset-password` - Resets the user's password using a valid token.
+
+### Users
+- `GET /users/me` - (Authenticated) Gets the current user's profile.
+
+### Recordings
+- `GET /recordings` - (Authenticated) Get a list of recordings available for the user's plan.
+- `GET /recordings/:id` - (Authenticated) Get details for a single recording.
+
+### Admin: Recordings Management
+- `POST /admin/recordings` - (Admin) Creates a new recording (metadata + S3 upload).
+- `PUT /admin/recordings/:id` - (Admin) Updates a recording's metadata.
+- `DELETE /admin/recordings/:id` - (Admin) Deletes a recording and its file from S3.
+
+### Admin: User Management
+- `GET /admin/users` - (Admin) Gets a list of all users.
+- `GET /admin/users/:id` - (Admin) Gets details for a single user.
+- `PUT /admin/users/:id` - (Admin) Updates a user's details (e.g., plan, role).
+- `DELETE /admin/users/:id` - (Admin) Deletes a user.
+
+## 7. User Flows
+
+- **Registration:** User provides email/password -> API creates user (isVerified=false) -> Sends verification email.
+- **Verification:** User clicks link/provides token -> API sets isVerified=true.
+- **Login:** User provides email/password -> API validates credentials and `isVerified` status -> Returns JWT.
+- **Recording Creation (Admin):** Admin sends recording metadata and token -> API validates admin role -> Saves metadata to DB -> Uploads audio file to S3 -> Updates recording with `audioUrl`. On failure, transaction is rolled back.
+
+## 8. Business Logic & Considerations
+
+- **Subscription Plans:** Users start with a "FREE" plan upon registration. Upgrades to "PREMIUM" are handled manually by an admin. The API must filter access to recordings based on the user's plan.
+- **Email Verification:** Users cannot log in or access content until their email is verified.
+
+## 9. Error Handling
+
+All API error responses will follow a standardized JSON format:
+
+```json
+{
+  "statusCode": <number>,
+  "message": <string>,
+  "error": <string> // Optional, for development debugging
+}
+```
+
+- **Common Status Codes:**
+  - `400 Bad Request`: Invalid input from the client.
+  - `401 Unauthorized`: Missing or invalid authentication token.
+  - `403 Forbidden`: Authenticated user does not have permission.
+  - `404 Not Found`: The requested resource does not exist.
+  - `500 Internal Server Error`: A generic server-side error.
+
+## 10. Pagination
+
+Endpoints that return a list of resources (e.g., `GET /recordings`, `GET /admin/users`) will support pagination via query parameters.
+
+- `?page=<number>`: The page number to retrieve (Default: 1).
+- `?limit=<number>`: The number of items per page (Default: 10, Max: 50).
+
+The response for a paginated resource will be structured as follows:
+
+```json
+{
+  "data": [...],
+  "pagination": {
+    "totalItems": <number>,
+    "totalPages": <number>,
+    "currentPage": <number>
+  }
+}
+```
+
+## 11. Security
+
+- **Authentication:** JWTs (JSON Web Tokens) will be used for securing endpoints. The token will be sent in the `Authorization` header (`Bearer <token>`).
+- **JWT Expiration:** Tokens will have a short expiration time (e.g., 1 hour) to enhance security. A refresh token mechanism could be implemented later if needed.
+- **Password Policy:** Passwords must meet minimum complexity requirements (e.g., 8 characters, at least one number and one letter). All passwords will be securely hashed using a strong algorithm like bcrypt.
+
+## 12. Environment Configuration
+
+The application will require the following environment variables to run. For local development, a placeholder `env.txt` file will be used (see section 14). For production, a standard `.env` file should be used and kept out of version control.
+
+- `DATABASE_URL`: The connection string for the PostgreSQL database.
+- `PORT`: The port on which the Express server will run (e.g., 3000).
+- `JWT_SECRET`: A secret key for signing JWTs.
+- `JWT_EXPIRES_IN`: The expiration time for JWTs (e.g., "1h").
+- `AWS_ACCESS_KEY_ID`: AWS credentials for S3.
+- `AWS_SECRET_ACCESS_KEY`: AWS credentials for S3.
+- `AWS_S3_BUCKET_NAME`: The name of the S3 bucket for storing recordings.
+
+## 13. API Documentation
+
+- **Standard:** The API will be documented using the OpenAPI 3.0 specification.
+- **Generation:** Documentation will be generated automatically from JSDoc-style comments directly within the TypeScript code. This ensures that the documentation is always in sync with the implementation.
+- **Tools:** We will use libraries like `swagger-jsdoc` and `swagger-ui-express` to parse the comments and serve the interactive documentation.
+- **Endpoint:** The interactive API documentation will be available at a dedicated endpoint, such as `/api-docs`.
+
+## 14. Development & Collaboration Directives
+
+### A. Environment Variables (`env.txt`)
+
+For development, we will use a placeholder file named `env.txt` instead of a `.env` file. It should contain all necessary variables with placeholder values.
+
+**`env.txt` Content:**
+```
+# Voces de la Extinción - Placeholder Environment Variables
+# For actual development, copy this to a .env file and replace with real values.
+# The .env file should be in .gitignore and never be committed.
+
+# PostgreSQL Database
+DATABASE_URL="postgresql://user:password@localhost:5432/voces_db?schema=public"
+
+# Server Port
+PORT=3001
+
+# JWT Authentication
+JWT_SECRET="your-super-secret-jwt-key-that-is-long-and-random"
+JWT_EXPIRES_IN="24h"
+
+# AWS S3 Storage
+AWS_ACCESS_KEY_ID="YOUR_AWS_ACCESS_KEY_ID"
+AWS_SECRET_ACCESS_KEY="YOUR_AWS_SECRET_ACCESS_KEY"
+AWS_S3_BUCKET_NAME="your-s3-bucket-name"
+```
+
+### B. Terminal Command Execution
+
+IMPORTANT: I will not run terminal commands directly. I will provide the necessary commands for you to execute in your own terminal environment. This ensures compatibility with your specific setup.
+
+## 15. Development Plan
+
+Here is a step-by-step plan to guide the development of the API:
+
+**Phase 1: Project Foundation**
+1.  **Initialize Project:** Set up a new Node.js project with TypeScript.
+2.  **Install Dependencies:** Add core dependencies like Express, Prisma, and TypeScript tools.
+3.  **Configure TypeScript:** Create and configure the `tsconfig.json` file.
+4.  **Basic Server:** Create a minimal Express server to confirm the setup is working.
+5.  **Folder Structure:** Establish a clean directory structure (e.g., `src`, `src/routes`, `src/controllers`, `src/middleware`).
+6.  **Creation:** Create all the routes, controllers and middlewares the API will need. Please check the requirements. All this functions and routes will have a placeholder. Do not create logic yet.
+
+**Phase 2: Database and Models**
+1.  **Setup Prisma:** Initialize Prisma and connect it to the PostgreSQL database.
+2.  **Define Schema:** Translate the data models (User, Recording, Tag) into a `schema.prisma` file.
+3.  **Run Migration:** Execute the initial database migration to create the tables.
+4.  **Creation:** Create all the models the API will need. Please check the requirements.
+
+**Phase 3: Core Functionality**
+1.  **Authentication:**
+    - Implement the full authentication flow: register, verify email, login, and password reset.
+    - Implement JWT generation and validation middleware.
+
+**Phase 4: Main Features**
+1.  **Recordings Access:**
+    - Implement the endpoints for users to fetch recordings based on their subscription plan.
+    - Add pagination to the recordings list.
+2.  **Admin Panel:**
+    - Create an admin-only middleware to protect admin routes.
+    - Implement full CRUD functionality for recordings, including S3 file uploads.
+    - Implement full CRUD functionality for user management.
+
+**Phase 5: General**
+1.  **Input Validation:**
+    - Add robust validation to all API endpoints to ensure data integrity.
+2.  **Error Handling:**
+    - Implement the standardized error handling middleware across the entire application.
+
+**Phase 6: AWS integration**
+1.  **S3 Integration:**
+    - Implement the S3 integration for storing recordings.
+  
+
+	
+
+
