@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import recordingRoutes from './routes/recording.routes';
@@ -10,6 +11,8 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+app.use(cors());
 
 // Middleware to parse JSON bodies
 app.use(express.json());
