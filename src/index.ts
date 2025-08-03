@@ -6,6 +6,7 @@ import userRoutes from './routes/user.routes';
 import recordingRoutes from './routes/recording.routes';
 import adminRoutes from './routes/admin.routes';
 import tagRoutes from './routes/tag.routes';
+import metricsRoutes from './routes/metrics.routes';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/users', userRoutes);
 app.use('/recordings', recordingRoutes);
 app.use('/admin', adminRoutes);
 app.use('/tags', tagRoutes);
+app.use('/metrics', metricsRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Voces de la Extinción API is running!');
