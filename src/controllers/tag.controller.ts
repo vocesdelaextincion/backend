@@ -1,18 +1,69 @@
-import { Request, Response, NextFunction } from 'express';
-import prisma from '../config/prisma';
+import { Request, Response, NextFunction } from "express";
+import prisma from "../config/prisma";
 
+/**
+ * Get tags with search functionality
+ *
+ * Query Parameters:
+ * - search: Search term(s) to filter across tag name
+ *   Can be a single term or multiple comma-separated terms
+ *
+ * Example usage:
+ * GET /tags?search=nature
+ * GET /tags?search=bird sounds
+ * GET /tags?search=nature,birds,animal
+ */
 export const getTags = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
+    // Parse search parameter
+    const search = req.query.search as string;
+
+    // Build where clause for search
+    let whereClause = {};
+
+    if (search) {
+      // Split search terms by comma and trim whitespace
+      const searchTerms = search
+        .split(",")
+        .map((term) => term.trim())
+        .filter((term) => term.length > 0);
+
+      if (searchTerms.length > 0) {
+        // Create OR conditions for each search term across name field
+        const searchConditions = searchTerms.map((term) => ({
+          OR: [
+            {
+              name: {
+                contains: term,
+                mode: "insensitive" as const,
+              },
+            },
+          ],
+        }));
+
+        // Use OR to match any of the search terms
+        whereClause = {
+          OR: searchConditions,
+        };
+      }
+    }
+
+    // Get tags with search
     const tags = await prisma.tag.findMany({
+      where: whereClause,
       orderBy: {
-        name: 'asc',
+        name: "asc",
       },
     });
-    res.status(200).json(tags);
+
+    res.status(200).json({
+      data: tags,
+      search: search || null,
+    });
   } catch (error) {
     next(error);
   }
@@ -30,7 +81,7 @@ export const getTagById = async (
     });
 
     if (!tag) {
-      res.status(404).json({ message: 'Tag not found' });
+      res.status(404).json({ message: "Tag not found" });
       return;
     }
 
