@@ -231,3 +231,26 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+export const me = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    // The protect middleware already validates the token and attaches the user to req
+    const user = (req as any).user;
+    
+    if (!user) {
+      res.status(401).json({ message: 'Not authorized' });
+      return;
+    }
+
+    // Return user information (excluding sensitive data)
+    res.status(200).json({
+      id: user.id,
+      email: user.email,
+      plan: user.plan,
+      role: user.role,
+      isVerified: user.isVerified
+    });
+  } catch (error) {
+    next(error);
+  }
+};

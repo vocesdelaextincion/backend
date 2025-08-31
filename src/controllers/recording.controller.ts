@@ -6,13 +6,13 @@ import { deleteS3Object, uploadToS3 } from "../utils/s3";
 
 /**
  * Get recordings with pagination and search functionality
- * 
+ *
  * Query Parameters:
  * - page: Page number (default: 1)
  * - limit: Items per page (default: 10, max: 100)
  * - search: Search term(s) to filter across title, description, and tags
  *   Can be a single term or multiple comma-separated terms
- * 
+ *
  * Example usage:
  * GET /recordings?page=2&limit=20&search=nature
  * GET /recordings?search=bird sounds
@@ -27,33 +27,39 @@ export const getRecordings = async (
   try {
     // Parse pagination parameters
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.limit as string) || 10)
+    );
     const skip = (page - 1) * limit;
-    
+
     // Parse search parameter
     const search = req.query.search as string;
-    
+
     // Build where clause for search
     let whereClause = {};
-    
+
     if (search) {
       // Split search terms by comma and trim whitespace
-      const searchTerms = search.split(',').map(term => term.trim()).filter(term => term.length > 0);
-      
+      const searchTerms = search
+        .split(",")
+        .map((term) => term.trim())
+        .filter((term) => term.length > 0);
+
       if (searchTerms.length > 0) {
         // Create OR conditions for each search term across all fields
-        const searchConditions = searchTerms.map(term => ({
+        const searchConditions = searchTerms.map((term) => ({
           OR: [
             {
               title: {
                 contains: term,
-                mode: 'insensitive' as const,
+                mode: "insensitive" as const,
               },
             },
             {
               description: {
                 contains: term,
-                mode: 'insensitive' as const,
+                mode: "insensitive" as const,
               },
             },
             {
@@ -61,14 +67,14 @@ export const getRecordings = async (
                 some: {
                   name: {
                     contains: term,
-                    mode: 'insensitive' as const,
+                    mode: "insensitive" as const,
                   },
                 },
               },
             },
           ],
         }));
-        
+
         // Use OR to match any of the search terms
         whereClause = {
           OR: searchConditions,
@@ -170,11 +176,10 @@ export const createRecording = async (
     const fileKey = `${randomUUID()}${fileExtension}`;
     const { fileUrl } = await uploadToS3(bucketName, fileKey, file.buffer);
 
-    const tagOperations =
+    const tagConnections =
       tags && Array.isArray(tags)
-        ? tags.map((tag: string) => ({
-            where: { name: tag },
-            create: { name: tag },
+        ? tags.map((tagId: string) => ({
+            id: tagId,
           }))
         : [];
 
@@ -189,7 +194,7 @@ export const createRecording = async (
         fileKey,
         metadata: parsedMetadata,
         tags: {
-          connectOrCreate: tagOperations,
+          connect: tagConnections,
         },
       },
       include: {
@@ -249,18 +254,12 @@ export const updateRecording = async (
       fileKey = uploadResult.fileKey;
     }
 
-    // Upsert tags to ensure they exist before connecting them
-    if (tags && Array.isArray(tags)) {
-      await Promise.all(
-        tags.map((tagName: string) =>
-          prisma.tag.upsert({
-            where: { name: tagName },
-            update: {},
-            create: { name: tagName },
-          })
-        )
-      );
-    }
+    const tagConnections =
+      tags && Array.isArray(tags)
+        ? tags.map((tagId: string) => ({
+            id: tagId,
+          }))
+        : [];
 
     // Metadata is expected to be a stringified JSON from the frontend
     const parsedMetadata = metadata ? JSON.parse(metadata) : undefined;
@@ -273,9 +272,9 @@ export const updateRecording = async (
         fileUrl,
         fileKey,
         metadata: parsedMetadata,
-        tags: tags
-          ? { set: tags.map((tagName: string) => ({ name: tagName })) }
-          : undefined,
+        tags: {
+          set: tagConnections,
+        },
       },
       include: {
         tags: true,

@@ -5,6 +5,7 @@ import {
   verifyEmail,
   forgotPassword,
   resetPassword,
+  me,
 } from "../controllers/auth.controller";
 import {
   registerValidator,
@@ -13,6 +14,7 @@ import {
   resetPasswordValidator,
   handleValidationErrors,
 } from "../middleware/validators";
+import { protect } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -31,5 +33,8 @@ router.post(
   handleValidationErrors,
   resetPassword
 );
+
+// Get current user information (requires authentication)
+router.get("/me", protect, me);
 
 export default router;
